@@ -2,15 +2,14 @@
  * @name OldMediaButtons
  * @author KingGamingYT
  * @description Restores Discord's "hyperlink" button style in the media viewer used until late 2024.
- * @version 1.1.0
+ * @version 1.1.1
  */
 
 const { Data, Webpack, React, Patcher, DOM, UI } = BdApi;
 const mediaViewer = Webpack.getModule(m => String(m.type).includes(".mediaArea"))
 let actionButtons = Webpack.getByStrings('hideMediaOptions');
 
-const buttonCSS = 
-    `
+const buttonCSS = `
     .carouselModal .topBar {
         display: none;
     }
@@ -49,6 +48,7 @@ const buttonCSS =
         }
     }
 `;
+
 function webpackify(css, styles) {
     for (const key in styles) {
         let regex = new RegExp(`\\.${key}([\\s,.):>])`, 'g');
@@ -58,42 +58,60 @@ function webpackify(css, styles) {
 }
 
 module.exports = class OldMediaButtons {
-    constructor(meta) {
-        this.controller = new AbortController();
-    }
+    constructor(meta) {}
 
     start() {
-        this.addStyles();
+		console.log("STARTING")
+		this.controller = new AbortController();
+        window.stylepromise = this.addStyles();
         Patcher.after('OldMediaButtons', mediaViewer, "type", (that, [props, context], res) => {
             if (!actionButtons) {
                 actionButtons = BdApi.Webpack.getByStrings('hideMediaOptions');
-            } 
+            }
+           Patcher.after('OldMediaButtons', res.props, "children", (that, subprops, res) => {
+            console.log() 
             res.props.children = [res.props.children, React.createElement("div", {className: "omb-anchorContainer",
                 style: { display: "flex", position: "relative", lineHeight: "30px", zIndex: "9999"},
                 children: React.createElement(actionButtons, { item: props.items[0]})})
             ]
+           } )
+           
         });
     }
     stop() {
+		this.controller.abort();
         Patcher.unpatchAll('OldMediaButtons');
         DOM.removeStyle('buttonCSS', buttonCSS);
     }
+	
+	async addStyles() {
+		console.log("add styles")
+		
+		console.log("classesMediaArea");
+		const classesMediaArea = await Webpack.waitForModule((e, m) => Webpack.Filters.byKeys('mediaArea')(m.exports))
+		
+		console.log("classesTopBar");
+		const classesTopBar = await Webpack.waitForModule((e, m) => Webpack.Filters.byKeys('topBar')(m.exports))
+		
+		console.log("classesCarouselModal");
+		const classesCarouselModal = await Webpack.waitForModule((e, m) => Webpack.Filters.byKeys('carouselModal')(m.exports))
+		
+		console.log("classesActionButtons");
+		const classesActionButtons = await Webpack.waitForModule((e, m) => Webpack.Filters.byKeys('actionButton', 'actionButtonWrapper')(m.exports))
+		
+		// This means stop() was called before the promises were resolved
+		if (this.controller.signal.aborted) return;
 
-    async addStyles() {
-        const classesMediaArea = await Webpack.waitForModule(Webpack.Filters.byKeys('mediaArea'))
-        const classesTopBar = await Webpack.waitForModule(Webpack.Filters.byKeys('topBar'))
-        const classesCarouselModal = await Webpack.waitForModule(Webpack.Filters.byKeys('carouselModal'))
-        const classesActionButtons = await Webpack.waitForModule(Webpack.Filters.byKeys('actionButton', 'actionButtonWrapper'))
-    
-        const styles = Object.assign({},
-            classesMediaArea,
-            classesTopBar,
-            classesCarouselModal,
-            classesActionButtons
-        )
-    
-        if (this.controller.signal.aborted) return;
-    
-        DOM.addStyle('buttonCSS', webpackify(buttonCSS, styles));
-    }
+		const styles = Object.assign({},
+			classesMediaArea,
+			classesTopBar,
+			classesCarouselModal,
+			classesActionButtons
+		);
+		
+		console.log(styles);
+		console.log(webpackify(buttonCSS, styles));
+		
+		DOM.addStyle('buttonCSS', webpackify(buttonCSS, styles));
+	}
 }
